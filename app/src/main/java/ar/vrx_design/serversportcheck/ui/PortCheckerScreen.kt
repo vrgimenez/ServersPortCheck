@@ -13,11 +13,13 @@ import ar.vrx_design.serversportcheck.viewmodel.PortCheckerViewModel
 fun PortCheckerScreen() {
     val viewModel: PortCheckerViewModel = viewModel()
 
-    // Ahora usamos portStatus como un estado observable
-    val status by viewModel.portStatus
+    var host1 by remember { mutableStateOf("179.41.4.222") }
+    var port1 by remember { mutableStateOf("40050") }
 
-    var host by remember { mutableStateOf("179.41.4.222") }
-    var port by remember { mutableStateOf("40051") }
+    var host2 by remember { mutableStateOf("179.41.4.222") }
+    var port2 by remember { mutableStateOf("40051") }
+
+    val status by viewModel.portStatus
     var isChecking by remember { mutableStateOf(false) }
 
     Column(
@@ -27,24 +29,50 @@ fun PortCheckerScreen() {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        TextField(
-            value = host,
-            onValueChange = { host = it },
-            label = { Text("Host") },
-            modifier = Modifier.fillMaxWidth()
-        )
+        // Primera fila de Host y Puerto
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TextField(
+                value = host1,
+                onValueChange = { host1 = it },
+                label = { Text("Host 1") },
+                modifier = Modifier.weight(1f)
+            )
+            TextField(
+                value = port1,
+                onValueChange = { port1 = it },
+                label = { Text("Puerto 1") },
+                modifier = Modifier.weight(1f)
+            )
+        }
         Spacer(modifier = Modifier.height(8.dp))
-        TextField(
-            value = port,
-            onValueChange = { port = it },
-            label = { Text("Puerto") },
-            modifier = Modifier.fillMaxWidth()
-        )
+
+        // Segunda fila de Host y Puerto
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TextField(
+                value = host2,
+                onValueChange = { host2 = it },
+                label = { Text("Host 2") },
+                modifier = Modifier.weight(1f)
+            )
+            TextField(
+                value = port2,
+                onValueChange = { port2 = it },
+                label = { Text("Puerto 2") },
+                modifier = Modifier.weight(1f)
+            )
+        }
         Spacer(modifier = Modifier.height(16.dp))
+
+        // Botón para iniciar monitoreo
         Button(
             onClick = {
                 if (!isChecking) {
-                    viewModel.startChecking(host, port.toInt(), 1_000L) // Intervalo de 1 segundos
+                    viewModel.startChecking(
+                        listOf(
+                            Pair(host1, port1.toIntOrNull() ?: 0),
+                            Pair(host2, port2.toIntOrNull() ?: 0)
+                        )
+                    )
                     isChecking = true
                 }
             },
@@ -53,6 +81,8 @@ fun PortCheckerScreen() {
             Text("Iniciar monitoreo")
         }
         Spacer(modifier = Modifier.height(16.dp))
-        Text(text = "Estado: $status", style = MaterialTheme.typography.bodyLarge)
+
+        // Estado
+        Text(text = "Estado:\n$status", style = MaterialTheme.typography.bodyLarge)
     }
 }
