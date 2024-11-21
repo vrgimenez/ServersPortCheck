@@ -4,6 +4,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.IOException
@@ -13,10 +14,13 @@ import java.net.Socket
 class PortCheckerViewModel : ViewModel() {
 
     val portStatus = mutableStateOf("Esperando...")
+    private var isRunning = false
+    private var checkingJob: Job? = null
 
     fun startChecking(hostsAndPorts: List<Pair<String, Int>>, interval: Long = 10_000L) {
+        isRunning = true
         viewModelScope.launch(Dispatchers.IO) {
-            while (true) {
+            while (isRunning) {
                 val statuses = hostsAndPorts.map { (host, port) ->
                     if (checkPort(host, port)) {
                         "El puerto $port está abierto en $host"
@@ -30,10 +34,16 @@ class PortCheckerViewModel : ViewModel() {
         }
     }
 
+    fun stopChecking() {
+        isRunning = false
+        checkingJob?.cancel()
+        portStatus.value = "Monitoreo detenido"
+    }
+
     private fun checkPort(host: String, port: Int): Boolean {
         return try {
             Socket().use { socket ->
-                socket.connect(InetSocketAddress(host, port), 1000) // 1000 ms de tiempo de espera
+                socket.connect(InetSocketAddress(host, port), 1000)
                 true
             }
         } catch (e: IOException) {

@@ -5,6 +5,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ar.vrx_design.serversportcheck.viewmodel.PortCheckerViewModel
@@ -29,6 +30,23 @@ fun PortCheckerScreen() {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        // Títulos de las columnas
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                text = "Host",
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.weight(1f),
+                textAlign = TextAlign.Center
+            )
+            Text(
+                text = "Puerto",
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.weight(1f),
+                textAlign = TextAlign.Center
+            )
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+
         // Primera fila de Host y Puerto
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             TextField(
@@ -63,22 +81,23 @@ fun PortCheckerScreen() {
         }
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Botón para iniciar monitoreo
+        // Botón para iniciar/detener monitoreo
         Button(
             onClick = {
-                if (!isChecking) {
+                if (isChecking) {
+                    viewModel.stopChecking()
+                } else {
                     viewModel.startChecking(
                         listOf(
                             Pair(host1, port1.toIntOrNull() ?: 0),
                             Pair(host2, port2.toIntOrNull() ?: 0)
                         )
                     )
-                    isChecking = true
                 }
-            },
-            enabled = !isChecking
+                isChecking = !isChecking
+            }
         ) {
-            Text("Iniciar monitoreo")
+            Text(if (isChecking) "Detener monitoreo" else "Iniciar monitoreo")
         }
         Spacer(modifier = Modifier.height(16.dp))
 
