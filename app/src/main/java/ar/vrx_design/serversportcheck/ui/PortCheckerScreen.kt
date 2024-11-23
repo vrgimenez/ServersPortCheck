@@ -3,6 +3,7 @@ package ar.vrx_design.serversportcheck.ui
 import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
@@ -10,7 +11,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -26,13 +26,11 @@ fun PortCheckerScreenDynamic(context: Context) {
     val isChecking by viewModel.isChecking.collectAsState()
     val statuses by viewModel.portStatuses.collectAsState()
 
-    // Cargar filas al iniciar
     LaunchedEffect(Unit) {
         val savedRows = PortCheckerDataStore.loadRows(context)
         viewModel.updateRows(savedRows)
     }
 
-    // Guardar filas al salir
     DisposableEffect(Unit) {
         onDispose {
             runBlocking { PortCheckerDataStore.saveRows(context, rows) }
@@ -42,55 +40,61 @@ fun PortCheckerScreenDynamic(context: Context) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.Top,
-        horizontalAlignment = Alignment.CenterHorizontally
+            .padding(16.dp)
     ) {
-        // Títulos de las columnas
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
+        // Encabezados de columnas
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(text = "#", modifier = Modifier.weight(0.2f), style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
-            Text(text = "Host", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
-            Text(text = "Port", modifier = Modifier.weight(0.6f), style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
-            Text(text = "Status", modifier = Modifier.weight(0.8f), style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
-            Text(text = "Borrar", modifier = Modifier.weight(0.4f), style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
+            Text(text = "Host", modifier = Modifier.weight(2f), style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
+            Text(text = "Port", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
+            Text(text = "Stat", modifier = Modifier.weight(0.4f), style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
+            Text(text = "Del", modifier = Modifier.weight(0.4f), style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
         }
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Renderizar filas dinámicamente
-        rows.forEachIndexed { index, (host, port) ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text(text = "${index + 1}", modifier = Modifier.weight(0.2f), textAlign = TextAlign.Center)
-                CompactTextField(
-                    value = host,
-                    onValueChange = { newHost ->
-                        viewModel.updateRows(rows.toMutableList().apply { this[index] = newHost to this[index].second })
-                    },
-                    modifier = Modifier.weight(1f)
-                )
-                CompactTextField(
-                    value = port,
-                    onValueChange = { newPort ->
-                        viewModel.updateRows(rows.toMutableList().apply { this[index] = this[index].first to newPort })
-                    },
-                    modifier = Modifier.weight(0.6f)
-                )
-                StatusIndicator(status = statuses.getOrNull(index))
-                IconButton(
-                    onClick = {
-                        viewModel.updateRows(rows.toMutableList().apply { removeAt(index) })
-                    },
-                    modifier = Modifier.weight(0.4f)
+        // Contenedor desplazable con LazyColumn
+        LazyColumn(
+            modifier = Modifier
+                .weight(1f) // Toma todo el espacio vertical disponible
+                .fillMaxWidth()
+        ) {
+            items(rows.size) { index ->
+                val (host, port) = rows[index]
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically // Centrar contenido verticalmente
                 ) {
-                    Icon(Icons.Default.Delete, contentDescription = "Borrar fila")
+                    Text(text = "${index + 1}", modifier = Modifier.weight(0.2f), textAlign = TextAlign.Center)
+                    CompactTextField(
+                        value = host,
+                        onValueChange = { newHost ->
+                            viewModel.updateRows(rows.toMutableList().apply { this[index] = newHost to this[index].second })
+                        },
+                        modifier = Modifier.weight(2f)
+                    )
+                    CompactTextField(
+                        value = port,
+                        onValueChange = { newPort ->
+                            viewModel.updateRows(rows.toMutableList().apply { this[index] = this[index].first to newPort })
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+                    StatusIndicator(
+                        status = statuses.getOrNull(index),
+                        modifier = Modifier.weight(0.6f)
+                    )
+                    IconButton(
+                        onClick = {
+                            viewModel.updateRows(rows.toMutableList().apply { removeAt(index) })
+                        },
+                        modifier = Modifier.weight(0.4f)
+                    ) {
+                        Icon(Icons.Default.Delete, contentDescription = "Eliminar fila")
+                    }
                 }
+                Spacer(modifier = Modifier.height(8.dp))
             }
-            Spacer(modifier = Modifier.height(8.dp))
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -146,27 +150,22 @@ fun CompactTextField(value: String, onValueChange: (String) -> Unit, modifier: M
 
 // Indicador de estado con semáforo y texto debajo
 @Composable
-fun StatusIndicator(status: String?) {
-    val color = when {
-        status?.contains("abierto", true) == true -> Color(0xFF008000)
-        status?.contains("cerrado", true) == true -> Color(0xFF800000)
+fun StatusIndicator(status: String?, modifier: Modifier = Modifier) {
+    val color = when (status) {
+        "Abierto" -> Color.Green
+        "Cerrado" -> Color.Red
         else -> Color.Gray
     }
-    Column(
-        //modifier = Modifier.weight(0.8f),
-        horizontalAlignment = Alignment.CenterHorizontally,
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = modifier
+            .size(24.dp) // Tamaño fijo del semáforo
+            .padding(4.dp) // Espaciado interno opcional
     ) {
         Box(
             modifier = Modifier
-                .size(16.dp)
-                .clip(CircleShape)
-                .background(color)
-        )
-        Text(
-            text = status ?: "Waiting",
-            color = color,
-            style = MaterialTheme.typography.bodyMedium,
-            textAlign = TextAlign.Center
+                .size(16.dp) // Tamaño del círculo
+                .background(color, shape = CircleShape)
         )
     }
 }
