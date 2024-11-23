@@ -15,18 +15,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import ar.vrx_design.serversportcheck.viewmodel.PortCheckerViewModel
 
 @Composable
-fun PortCheckerScreen() {
+fun PortCheckerScreenDynamic() {
     val viewModel: PortCheckerViewModel = viewModel()
-
-    var host1 by remember { mutableStateOf("179.41.4.222") }
-    var port1 by remember { mutableStateOf("40050") }
-
-    var host2 by remember { mutableStateOf("179.41.4.222") }
-    var port2 by remember { mutableStateOf("40051") }
-
-    var host3 by remember { mutableStateOf("avlmaker.com.ar") }
-    var port3 by remember { mutableStateOf("80") }
-
+    val rows = remember { mutableStateListOf<Pair<String, String>>() } // Lista de pares (host, puerto)
     val statuses by viewModel.portStatuses
     var isChecking by remember { mutableStateOf(false) }
 
@@ -69,41 +60,36 @@ fun PortCheckerScreen() {
         }
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Primera fila
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Text(text = "1", modifier = Modifier.weight(0.2f), textAlign = TextAlign.Center)
-            CompactTextField(value = host1, onValueChange = { host1 = it }, modifier = Modifier.weight(1f))
-            CompactTextField(value = port1, onValueChange = { port1 = it }, modifier = Modifier.weight(0.6f))
-            StatusIndicator(status = statuses.getOrNull(0))
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // Segunda fila
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Text(text = "2", modifier = Modifier.weight(0.2f), textAlign = TextAlign.Center)
-            CompactTextField(value = host2, onValueChange = { host2 = it }, modifier = Modifier.weight(1f))
-            CompactTextField(value = port2, onValueChange = { port2 = it }, modifier = Modifier.weight(0.6f))
-            StatusIndicator(status = statuses.getOrNull(1))
+        // Renderizar filas dinámicamente
+        rows.forEachIndexed { index, (host, port) ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(text = "${index + 1}", modifier = Modifier.weight(0.2f), textAlign = TextAlign.Center)
+                CompactTextField(
+                    value = host,
+                    onValueChange = { newHost -> rows[index] = newHost to rows[index].second },
+                    modifier = Modifier.weight(1f)
+                )
+                CompactTextField(
+                    value = port,
+                    onValueChange = { newPort -> rows[index] = rows[index].first to newPort },
+                    modifier = Modifier.weight(0.6f)
+                )
+                StatusIndicator(status = statuses.getOrNull(index))
+            }
+            Spacer(modifier = Modifier.height(8.dp))
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Tercera fila
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        // Botón para agregar filas
+        Button(
+            onClick = { rows.add("" to "") },
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Text(text = "3", modifier = Modifier.weight(0.2f), textAlign = TextAlign.Center)
-            CompactTextField(value = host3, onValueChange = { host3 = it }, modifier = Modifier.weight(1f))
-            CompactTextField(value = port3, onValueChange = { port3 = it }, modifier = Modifier.weight(0.6f))
-            StatusIndicator(status = statuses.getOrNull(1))
+            Text("Agregar fila")
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -115,15 +101,12 @@ fun PortCheckerScreen() {
                     viewModel.stopChecking()
                 } else {
                     viewModel.startChecking(
-                        listOf(
-                            Pair(host1, port1.toIntOrNull() ?: 0),
-                            Pair(host2, port2.toIntOrNull() ?: 0),
-                            Pair(host3, port3.toIntOrNull() ?: 0)
-                        )
+                        rows.map { Pair(it.first, it.second.toIntOrNull() ?: 0) }
                     )
                 }
                 isChecking = !isChecking
-            }
+            },
+            modifier = Modifier.fillMaxWidth()
         ) {
             Text(if (isChecking) "Detener monitoreo" else "Iniciar monitoreo")
         }
