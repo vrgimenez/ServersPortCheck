@@ -22,22 +22,20 @@ import kotlinx.coroutines.runBlocking
 @Composable
 fun PortCheckerScreenDynamic(context: Context) {
     val viewModel: PortCheckerViewModel = viewModel()
-    val rows = remember { mutableStateListOf<Pair<String, String>>() }
-    val statuses by viewModel.portStatuses
-    var isChecking by remember { mutableStateOf(false) }
+    val rows by viewModel.rows.collectAsState()
+    val isChecking by viewModel.isChecking.collectAsState()
+    val statuses by viewModel.portStatuses.collectAsState()
 
     // Cargar filas al iniciar
     LaunchedEffect(Unit) {
         val savedRows = PortCheckerDataStore.loadRows(context)
-        rows.addAll(savedRows)
+        viewModel.updateRows(savedRows)
     }
 
-    // Guardar filas al salir de la pantalla
+    // Guardar filas al salir
     DisposableEffect(Unit) {
         onDispose {
-            rows.takeIf { it.isNotEmpty() }?.let {
-                runBlocking { PortCheckerDataStore.saveRows(context, it) }
-            }
+            runBlocking { PortCheckerDataStore.saveRows(context, rows) }
         }
     }
 
@@ -70,17 +68,23 @@ fun PortCheckerScreenDynamic(context: Context) {
                 Text(text = "${index + 1}", modifier = Modifier.weight(0.2f), textAlign = TextAlign.Center)
                 CompactTextField(
                     value = host,
-                    onValueChange = { newHost -> rows[index] = newHost to rows[index].second },
+                    onValueChange = { newHost ->
+                        viewModel.updateRows(rows.toMutableList().apply { this[index] = newHost to this[index].second })
+                    },
                     modifier = Modifier.weight(1f)
                 )
                 CompactTextField(
                     value = port,
-                    onValueChange = { newPort -> rows[index] = rows[index].first to newPort },
+                    onValueChange = { newPort ->
+                        viewModel.updateRows(rows.toMutableList().apply { this[index] = this[index].first to newPort })
+                    },
                     modifier = Modifier.weight(0.6f)
                 )
                 StatusIndicator(status = statuses.getOrNull(index))
                 IconButton(
-                    onClick = { rows.removeAt(index) },
+                    onClick = {
+                        viewModel.updateRows(rows.toMutableList().apply { removeAt(index) })
+                    },
                     modifier = Modifier.weight(0.4f)
                 ) {
                     Icon(Icons.Default.Delete, contentDescription = "Borrar fila")
@@ -93,7 +97,9 @@ fun PortCheckerScreenDynamic(context: Context) {
 
         // Botón para agregar filas
         Button(
-            onClick = { rows.add("" to "") },
+            onClick = {
+                viewModel.updateRows(rows + ("" to ""))
+            },
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("Agregar fila")
@@ -111,7 +117,6 @@ fun PortCheckerScreenDynamic(context: Context) {
                         rows.map { Pair(it.first, it.second.toIntOrNull() ?: 0) }
                     )
                 }
-                isChecking = !isChecking
             },
             modifier = Modifier.fillMaxWidth()
         ) {

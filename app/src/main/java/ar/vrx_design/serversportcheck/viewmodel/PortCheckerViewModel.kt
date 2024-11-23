@@ -1,53 +1,68 @@
 package ar.vrx_design.serversportcheck.viewmodel
 
-import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import java.io.IOException
 import java.net.InetSocketAddress
 import java.net.Socket
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.update
 
 class PortCheckerViewModel : ViewModel() {
+    private val _portStatuses = MutableStateFlow<List<String>>(emptyList())
+    val portStatuses: StateFlow<List<String>> get() = _portStatuses
 
-    val portStatuses = mutableStateOf(listOf<String>())
-    private var isRunning = false
-    private var checkingJob: Job? = null
+    private val _rows = MutableStateFlow<List<Pair<String, String>>>(emptyList())
+    val rows: StateFlow<List<Pair<String, String>>> get() = _rows
 
-    fun startChecking(hostsAndPorts: List<Pair<String, Int>>, interval: Long = 10_000L) {
-        isRunning = true
-        checkingJob = viewModelScope.launch(Dispatchers.IO) {
-            while (isRunning) {
-                val statuses = hostsAndPorts.map { (host, port) ->
-                    if (checkPort(host, port)) {
-                        "Abierto"
-                    } else {
-                        "Cerrado"
+    private val _isChecking = MutableStateFlow(false)
+    val isChecking: StateFlow<Boolean> get() = _isChecking
+
+    private var monitoringJob: Job? = null
+
+    fun startChecking(newRows: List<Pair<String, Int>>) {
+        _isChecking.value = true
+        _portStatuses.value = List(newRows.size) { "Esperando" }
+
+        monitoringJob = CoroutineScope(Dispatchers.IO).launch {
+            while (_isChecking.value) {
+                newRows.forEachIndexed { index, (host, port) ->
+                    val status = checkPort(host, port)
+                    _portStatuses.update { currentStatuses ->
+                        currentStatuses.toMutableList().apply {
+                            this[index] = status
+                        }
                     }
                 }
-                portStatuses.value = statuses
-                delay(interval)
+                delay(5000) // Esperar 5 segundos entre verificaciones
             }
         }
     }
 
     fun stopChecking() {
-        isRunning = false
-        checkingJob?.cancel()
-        portStatuses.value = listOf("Esperando...", "Esperando...")
+        _isChecking.value = false
+        monitoringJob?.cancel()
+        monitoringJob = null
     }
 
-    private fun checkPort(host: String, port: Int): Boolean {
+    fun updateRows(newRows: List<Pair<String, String>>) {
+        _rows.value = newRows
+        _portStatuses.value = List(newRows.size) { "Esperando" }
+    }
+
+    private fun checkPort(host: String, port: Int): String {
+        // Lógica de verificación del puerto
         return try {
             Socket().use { socket ->
-                socket.connect(InetSocketAddress(host, port), 1000)
-                true
+                socket.connect(InetSocketAddress(host, port), 2000)
+                "Abierto"
             }
-        } catch (e: IOException) {
-            false
+        } catch (e: Exception) {
+            "Cerrado"
         }
     }
 }
