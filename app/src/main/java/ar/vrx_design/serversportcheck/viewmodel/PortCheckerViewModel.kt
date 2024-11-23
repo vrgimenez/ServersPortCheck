@@ -13,22 +13,22 @@ import java.net.Socket
 
 class PortCheckerViewModel : ViewModel() {
 
-    val portStatus = mutableStateOf("Esperando...")
+    val portStatuses = mutableStateOf(listOf<String>())
     private var isRunning = false
     private var checkingJob: Job? = null
 
     fun startChecking(hostsAndPorts: List<Pair<String, Int>>, interval: Long = 10_000L) {
         isRunning = true
-        viewModelScope.launch(Dispatchers.IO) {
+        checkingJob = viewModelScope.launch(Dispatchers.IO) {
             while (isRunning) {
                 val statuses = hostsAndPorts.map { (host, port) ->
                     if (checkPort(host, port)) {
-                        "El puerto $port está abierto en $host"
+                        "Abierto"
                     } else {
-                        "El puerto $port está cerrado en $host"
+                        "Cerrado"
                     }
                 }
-                portStatus.value = statuses.joinToString(separator = "\n")
+                portStatuses.value = statuses
                 delay(interval)
             }
         }
@@ -37,7 +37,7 @@ class PortCheckerViewModel : ViewModel() {
     fun stopChecking() {
         isRunning = false
         checkingJob?.cancel()
-        portStatus.value = "Monitoreo detenido"
+        portStatuses.value = listOf("Esperando...", "Esperando...")
     }
 
     private fun checkPort(host: String, port: Int): Boolean {
