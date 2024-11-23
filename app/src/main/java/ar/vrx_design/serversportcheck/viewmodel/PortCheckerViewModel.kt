@@ -26,7 +26,7 @@ class PortCheckerViewModel : ViewModel() {
 
     fun startChecking(newRows: List<Pair<String, Int>>) {
         _isChecking.value = true
-        _portStatuses.value = List(newRows.size) { "Esperando" }
+        _portStatuses.value = List(newRows.size) { "Waiting" }
 
         monitoringJob = CoroutineScope(Dispatchers.IO).launch {
             while (_isChecking.value) {
@@ -47,11 +47,14 @@ class PortCheckerViewModel : ViewModel() {
         _isChecking.value = false
         monitoringJob?.cancel()
         monitoringJob = null
+
+        // Reiniciar los estados a "Waiting"
+        _portStatuses.value = List(_rows.value.size) { "Waiting" }
     }
 
     fun updateRows(newRows: List<Pair<String, String>>) {
         _rows.value = newRows
-        _portStatuses.value = List(newRows.size) { "Esperando" }
+        _portStatuses.value = List(newRows.size) { "Waiting" }
     }
 
     private fun checkPort(host: String, port: Int): String {
