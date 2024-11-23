@@ -1,8 +1,11 @@
 package ar.vrx_design.serversportcheck.ui
 
+import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -12,14 +15,31 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import ar.vrx_design.serversportcheck.utils.PortCheckerDataStore
 import ar.vrx_design.serversportcheck.viewmodel.PortCheckerViewModel
+import kotlinx.coroutines.runBlocking
 
 @Composable
-fun PortCheckerScreenDynamic() {
+fun PortCheckerScreenDynamic(context: Context) {
     val viewModel: PortCheckerViewModel = viewModel()
-    val rows = remember { mutableStateListOf<Pair<String, String>>() } // Lista de pares (host, puerto)
+    val rows = remember { mutableStateListOf<Pair<String, String>>() }
     val statuses by viewModel.portStatuses
     var isChecking by remember { mutableStateOf(false) }
+
+    // Cargar filas al iniciar
+    LaunchedEffect(Unit) {
+        val savedRows = PortCheckerDataStore.loadRows(context)
+        rows.addAll(savedRows)
+    }
+
+    // Guardar filas al salir de la pantalla
+    DisposableEffect(Unit) {
+        onDispose {
+            rows.takeIf { it.isNotEmpty() }?.let {
+                runBlocking { PortCheckerDataStore.saveRows(context, it) }
+            }
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -33,30 +53,11 @@ fun PortCheckerScreenDynamic() {
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text(
-                text = "#",
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.weight(0.2f),
-                textAlign = TextAlign.Center
-            )
-            Text(
-                text = "Host",
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.weight(1f),
-                textAlign = TextAlign.Center
-            )
-            Text(
-                text = "Puerto",
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.weight(0.6f),
-                textAlign = TextAlign.Center
-            )
-            Text(
-                text = "Estado",
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.weight(0.8f),
-                textAlign = TextAlign.Center
-            )
+            Text(text = "#", modifier = Modifier.weight(0.2f), style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
+            Text(text = "Host", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
+            Text(text = "Port", modifier = Modifier.weight(0.6f), style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
+            Text(text = "Status", modifier = Modifier.weight(0.8f), style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
+            Text(text = "Borrar", modifier = Modifier.weight(0.4f), style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
         }
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -78,6 +79,12 @@ fun PortCheckerScreenDynamic() {
                     modifier = Modifier.weight(0.6f)
                 )
                 StatusIndicator(status = statuses.getOrNull(index))
+                IconButton(
+                    onClick = { rows.removeAt(index) },
+                    modifier = Modifier.weight(0.4f)
+                ) {
+                    Icon(Icons.Default.Delete, contentDescription = "Borrar fila")
+                }
             }
             Spacer(modifier = Modifier.height(8.dp))
         }
@@ -151,7 +158,7 @@ fun StatusIndicator(status: String?) {
                 .background(color)
         )
         Text(
-            text = status ?: "Esperando...",
+            text = status ?: "Waiting",
             color = color,
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center
