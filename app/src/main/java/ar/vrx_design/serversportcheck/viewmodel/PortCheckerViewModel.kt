@@ -1,5 +1,8 @@
 package ar.vrx_design.serversportcheck.viewmodel
 
+import android.content.Context
+import android.media.Ringtone
+import android.media.RingtoneManager
 import androidx.lifecycle.ViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -24,7 +27,9 @@ class PortCheckerViewModel : ViewModel() {
 
     private var monitoringJob: Job? = null
 
-    fun startChecking(newRows: List<Pair<String, Int>>) {
+    private var ringtone: Ringtone? = null
+
+    fun startChecking(newRows: List<Pair<String, Int>>, context: Context) {
         _isChecking.value = true
         _portStatuses.value = List(newRows.size) { "Waiting" }
 
@@ -38,6 +43,10 @@ class PortCheckerViewModel : ViewModel() {
                         }
                     }
                 }
+                // Reproducir sonido si algún estado es "Cerrado"
+                if ("Cerrado" in _portStatuses.value) {
+                    playAlarm(context)
+                }
                 delay(5000) // Esperar 5 segundos entre verificaciones
             }
         }
@@ -50,11 +59,30 @@ class PortCheckerViewModel : ViewModel() {
 
         // Reiniciar los estados a "Waiting"
         _portStatuses.value = List(_rows.value.size) { "Waiting" }
+
+        ringtone?.stop() // Detener sonido si está activo
     }
 
     fun updateRows(newRows: List<Pair<String, String>>) {
         _rows.value = newRows
         _portStatuses.value = List(newRows.size) { "Waiting" }
+    }
+
+    private fun playAlarm(context: Context) {
+        if (ringtone == null) {
+            val notificationUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+            ringtone = RingtoneManager.getRingtone(context, notificationUri)
+        }
+
+        if (!ringtone!!.isPlaying) {
+            ringtone?.play()
+        }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        ringtone?.stop()
+        ringtone = null
     }
 
     private fun checkPort(host: String, port: Int): String {

@@ -118,7 +118,8 @@ fun PortCheckerScreenDynamic(context: Context) {
                     viewModel.stopChecking()
                 } else {
                     viewModel.startChecking(
-                        rows.map { Pair(it.first, it.second.toIntOrNull() ?: 0) }
+                        rows.map { Pair(it.first, it.second.toIntOrNull() ?: 0) },
+                        context
                     )
                 }
             },
