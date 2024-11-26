@@ -6,6 +6,7 @@ import android.media.RingtoneManager
 import androidx.lifecycle.ViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -14,6 +15,8 @@ import java.net.Socket
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
+import org.json.JSONArray
+import org.json.JSONObject
 
 class PortCheckerViewModel : ViewModel() {
     private val _portStatuses = MutableStateFlow<List<String>>(emptyList())
@@ -28,6 +31,33 @@ class PortCheckerViewModel : ViewModel() {
     private var monitoringJob: Job? = null
 
     private var ringtone: Ringtone? = null
+
+    suspend fun exportToJson(context: Context): String {
+        return withContext(Dispatchers.IO) {
+            val jsonArray = JSONArray()
+            rows.value.forEach { (host, port) ->
+                val jsonObject = JSONObject()
+                jsonObject.put("host", host)
+                jsonObject.put("port", port)
+                jsonArray.put(jsonObject)
+            }
+            jsonArray.toString()
+        }
+    }
+
+    suspend fun importFromJson(context: Context, jsonString: String) {
+        withContext(Dispatchers.IO) {
+            val jsonArray = JSONArray(jsonString)
+            val importedRows = mutableListOf<Pair<String, String>>()
+            for (i in 0 until jsonArray.length()) {
+                val jsonObject = jsonArray.getJSONObject(i)
+                val host = jsonObject.getString("host")
+                val port = jsonObject.getString("port")
+                importedRows.add(host to port)
+            }
+            _rows.value = importedRows
+        }
+    }
 
     fun startChecking(newRows: List<Pair<String, Int>>, context: Context) {
         _isChecking.value = true
@@ -63,9 +93,25 @@ class PortCheckerViewModel : ViewModel() {
         ringtone?.stop() // Detener sonido si está activo
     }
 
+    fun addRow(host: String = "", port: String = "") {
+        _rows.value = _rows.value + (host to port)
+    }
+
     fun updateRows(newRows: List<Pair<String, String>>) {
         _rows.value = newRows
         _portStatuses.value = List(newRows.size) { "Waiting" }
+    }
+
+    fun updateRow(index: Int, host: String, port: String) {
+        _rows.value = _rows.value.toMutableList().apply {
+            this[index] = host to port
+        }
+    }
+
+    fun removeRow(index: Int) {
+        _rows.value = _rows.value.toMutableList().apply {
+            removeAt(index)
+        }
     }
 
     private fun playAlarm(context: Context) {

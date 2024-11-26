@@ -17,7 +17,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ar.vrx_design.serversportcheck.utils.PortCheckerDataStore
 import ar.vrx_design.serversportcheck.viewmodel.PortCheckerViewModel
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import java.io.File
 
 @Composable
 fun PortCheckerScreenDynamic(context: Context) {
@@ -25,6 +27,7 @@ fun PortCheckerScreenDynamic(context: Context) {
     val rows by viewModel.rows.collectAsState()
     val isChecking by viewModel.isChecking.collectAsState()
     val statuses by viewModel.portStatuses.collectAsState()
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
         val savedRows = PortCheckerDataStore.loadRows(context)
@@ -69,14 +72,14 @@ fun PortCheckerScreenDynamic(context: Context) {
                     CompactTextField(
                         value = host,
                         onValueChange = { newHost ->
-                            viewModel.updateRows(rows.toMutableList().apply { this[index] = newHost to this[index].second })
+                            viewModel.updateRow(index, newHost, port)
                         },
                         modifier = Modifier.weight(2f)
                     )
                     CompactTextField(
                         value = port,
                         onValueChange = { newPort ->
-                            viewModel.updateRows(rows.toMutableList().apply { this[index] = this[index].first to newPort })
+                            viewModel.updateRow(index, host, newPort)
                         },
                         modifier = Modifier.weight(1f)
                     )
@@ -85,9 +88,7 @@ fun PortCheckerScreenDynamic(context: Context) {
                         modifier = Modifier.weight(0.6f)
                     )
                     IconButton(
-                        onClick = {
-                            viewModel.updateRows(rows.toMutableList().apply { removeAt(index) })
-                        },
+                        onClick = { viewModel.removeRow(index) },
                         modifier = Modifier.weight(0.4f)
                     ) {
                         Icon(Icons.Default.Delete, contentDescription = "Eliminar fila")
@@ -99,17 +100,37 @@ fun PortCheckerScreenDynamic(context: Context) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Botón para agregar filas
-        Button(
-            onClick = {
-                viewModel.updateRows(rows + ("" to ""))
-            },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Agregar fila")
+        // Botones para importar, exportar y agregar fila
+        Row(modifier = Modifier.fillMaxWidth().padding(8.dp)) {
+            Button(onClick = {
+                scope.launch {
+                    val json = viewModel.exportToJson(context)
+                    saveToFile(context, "hosts_ports.json", json)
+                }
+            }) {
+                Text("Exportar")
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            Button(onClick = {
+                scope.launch {
+                    val json = readFromFile(context, "hosts_ports.json")
+                    if (json != null) {
+                        viewModel.importFromJson(context, json)
+                    }
+                }
+            }) {
+                Text("Importar")
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            Button(
+                onClick = { viewModel.addRow() },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Agregar fila")
+            }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
         // Botón para iniciar/detener monitoreo
         Button(
@@ -128,6 +149,16 @@ fun PortCheckerScreenDynamic(context: Context) {
             Text(if (isChecking) "Detener monitoreo" else "Iniciar monitoreo")
         }
     }
+}
+
+fun saveToFile(context: Context, filename: String, content: String) {
+    val file = File(context.getExternalFilesDir(null), filename)
+    file.writeText(content)
+}
+
+fun readFromFile(context: Context, filename: String): String? {
+    val file = File(context.getExternalFilesDir(null), filename)
+    return if (file.exists()) file.readText() else null
 }
 
 // Campo de texto compacto
