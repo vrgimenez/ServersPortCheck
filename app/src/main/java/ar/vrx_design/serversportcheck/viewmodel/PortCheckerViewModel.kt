@@ -1,145 +1,133 @@
 package ar.vrx_design.serversportcheck.viewmodel
 
-import android.content.Context
-import android.media.Ringtone
-import android.media.RingtoneManager
-import androidx.lifecycle.ViewModel
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
+import android.app.Application
+import android.media.MediaPlayer
+import androidx.datastore.core.DataStore
+import androidx.datastore.dataStore
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import ar.vrx_design.serversportcheck.utils.RowStatusData
+import ar.vrx_design.serversportcheck.utils.RowStatusSerializer
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.*
+import java.io.IOException
 import java.net.InetSocketAddress
 import java.net.Socket
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.update
-import org.json.JSONArray
-import org.json.JSONObject
 
-class PortCheckerViewModel : ViewModel() {
-    private val _portStatuses = MutableStateFlow<List<String>>(emptyList())
-    val portStatuses: StateFlow<List<String>> get() = _portStatuses
+// Extensión DataStore en Application
+val Application.rowDataStore: DataStore<List<RowStatusData>> by dataStore(
+    fileName = "rows.json",
+    serializer = RowStatusSerializer
+)
 
-    private val _rows = MutableStateFlow<List<Pair<String, String>>>(emptyList())
-    val rows: StateFlow<List<Pair<String, String>>> get() = _rows
+data class RowStatus(
+    val host: String,
+    val port: String,
+    val status: String = "Esperando"
+)
 
-    private val _isChecking = MutableStateFlow(false)
-    val isChecking: StateFlow<Boolean> get() = _isChecking
+class PortCheckerViewModel(application: Application) : AndroidViewModel(application) {
+    private val _rows = MutableStateFlow<List<RowStatus>>(emptyList())
+    val rows: StateFlow<List<RowStatus>> = _rows.asStateFlow()
 
     private var monitoringJob: Job? = null
+    private var mediaPlayer: MediaPlayer? = null
 
-    private var ringtone: Ringtone? = null
+    private val dataStore = application.rowDataStore
 
-    suspend fun exportToJson(context: Context): String {
-        return withContext(Dispatchers.IO) {
-            val jsonArray = JSONArray()
-            rows.value.forEach { (host, port) ->
-                val jsonObject = JSONObject()
-                jsonObject.put("host", host)
-                jsonObject.put("port", port)
-                jsonArray.put(jsonObject)
-            }
-            jsonArray.toString()
-        }
-    }
-
-    suspend fun importFromJson(context: Context, jsonString: String) {
-        withContext(Dispatchers.IO) {
-            val jsonArray = JSONArray(jsonString)
-            val importedRows = mutableListOf<Pair<String, String>>()
-            for (i in 0 until jsonArray.length()) {
-                val jsonObject = jsonArray.getJSONObject(i)
-                val host = jsonObject.getString("host")
-                val port = jsonObject.getString("port")
-                importedRows.add(host to port)
-            }
-            _rows.value = importedRows
-        }
-    }
-
-    fun startChecking(newRows: List<Pair<String, Int>>, context: Context) {
-        _isChecking.value = true
-        _portStatuses.value = List(newRows.size) { "Waiting" }
-
-        monitoringJob = CoroutineScope(Dispatchers.IO).launch {
-            while (_isChecking.value) {
-                newRows.forEachIndexed { index, (host, port) ->
-                    val status = checkPort(host, port)
-                    _portStatuses.update { currentStatuses ->
-                        currentStatuses.toMutableList().apply {
-                            this[index] = status
-                        }
-                    }
-                }
-                // Reproducir sonido si algún estado es "Cerrado"
-                if ("Cerrado" in _portStatuses.value) {
-                    playAlarm(context)
-                }
-                delay(5000) // Esperar 5 segundos entre verificaciones
+    init {
+        // Cargar datos desde DataStore
+        viewModelScope.launch {
+            dataStore.data.collect { saved ->
+                _rows.value = saved.map { RowStatus(it.host, it.port) }
             }
         }
     }
 
-    fun stopChecking() {
-        _isChecking.value = false
-        monitoringJob?.cancel()
-        monitoringJob = null
-
-        // Reiniciar los estados a "Waiting"
-        _portStatuses.value = List(_rows.value.size) { "Waiting" }
-
-        ringtone?.stop() // Detener sonido si está activo
+    private suspend fun persist() {
+        dataStore.updateData { _rows.value.map { RowStatusData(it.host, it.port) } }
     }
 
-    fun addRow(host: String = "", port: String = "") {
-        _rows.value = _rows.value + (host to port)
-    }
-
-    fun updateRows(newRows: List<Pair<String, String>>) {
-        _rows.value = newRows
-        _portStatuses.value = List(newRows.size) { "Waiting" }
-    }
-
-    fun updateRow(index: Int, host: String, port: String) {
-        _rows.value = _rows.value.toMutableList().apply {
-            this[index] = host to port
-        }
+    fun addRow(host: String, port: String) {
+        _rows.update { it + RowStatus(host, port) }
+        viewModelScope.launch { persist() }
     }
 
     fun removeRow(index: Int) {
-        _rows.value = _rows.value.toMutableList().apply {
-            removeAt(index)
+        _rows.update { it.toMutableList().also { list -> list.removeAt(index) } }
+        viewModelScope.launch { persist() }
+    }
+
+    fun updateRow(index: Int, host: String, port: String) {
+        _rows.update { list ->
+            list.toMutableList().also {
+                it[index] = it[index].copy(host = host, port = port)
+            }
+        }
+        viewModelScope.launch { persist() }
+    }
+
+    private fun updateRowStatus(index: Int, status: String) {
+        _rows.update { list ->
+            list.toMutableList().also {
+                if (index in it.indices) {
+                    it[index] = it[index].copy(status = status)
+                }
+            }
         }
     }
 
-    private fun playAlarm(context: Context) {
-        if (ringtone == null) {
-            val notificationUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-            ringtone = RingtoneManager.getRingtone(context, notificationUri)
+    fun startMonitoring() {
+        if (monitoringJob?.isActive == true) return
+        monitoringJob = viewModelScope.launch(Dispatchers.IO) {
+            while (isActive) {
+                _rows.value.forEachIndexed { index, row ->
+                    val isOpen = checkPort(row.host, row.port.toIntOrNull() ?: return@forEachIndexed)
+                    if (isOpen) {
+                        updateRowStatus(index, "Abierto")
+                    } else {
+                        updateRowStatus(index, "Cerrado")
+                        playAlarm()
+                    }
+                }
+                delay(10_000)
+            }
         }
+    }
 
-        if (!ringtone!!.isPlaying) {
-            ringtone?.play()
+    fun stopMonitoring() {
+        monitoringJob?.cancel()
+        monitoringJob = null
+        stopAlarm()
+        _rows.update { list -> list.map { it.copy(status = "Esperando") } }
+    }
+
+    private fun checkPort(host: String, port: Int, timeout: Int = 2000): Boolean {
+        return try {
+            Socket().use { socket ->
+                socket.connect(InetSocketAddress(host, port), timeout)
+                true
+            }
+        } catch (e: IOException) {
+            false
         }
+    }
+
+    private fun playAlarm() {
+        if (mediaPlayer == null) {
+            mediaPlayer = MediaPlayer.create(getApplication(), android.provider.Settings.System.DEFAULT_NOTIFICATION_URI)
+        }
+        mediaPlayer?.start()
+    }
+
+    private fun stopAlarm() {
+        mediaPlayer?.stop()
+        mediaPlayer?.release()
+        mediaPlayer = null
     }
 
     override fun onCleared() {
         super.onCleared()
-        ringtone?.stop()
-        ringtone = null
-    }
-
-    private fun checkPort(host: String, port: Int): String {
-        // Lógica de verificación del puerto
-        return try {
-            Socket().use { socket ->
-                socket.connect(InetSocketAddress(host, port), 2000)
-                "Abierto"
-            }
-        } catch (e: Exception) {
-            "Cerrado"
-        }
+        stopMonitoring()
     }
 }
