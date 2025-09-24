@@ -1,6 +1,8 @@
 package ar.vrx_design.serversportcheck.ui
 
 import android.content.Context
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -28,6 +30,34 @@ fun PortCheckerScreenDynamic(context: Context) {
     val isChecking by viewModel.isChecking.collectAsState()
     val statuses by viewModel.portStatuses.collectAsState()
     val scope = rememberCoroutineScope()
+
+    // Exportar archivo
+    val exportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        uri?.let {
+            scope.launch {
+                val json = viewModel.exportToJson(context)
+                context.contentResolver.openOutputStream(uri)?.use { outputStream ->
+                    outputStream.write(json.toByteArray())
+                }
+            }
+        }
+    }
+
+    // Importar archivo
+    val importLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri?.let {
+            scope.launch {
+                context.contentResolver.openInputStream(uri)?.use { inputStream ->
+                    val json = inputStream.bufferedReader().readText()
+                    viewModel.importFromJson(context, json)
+                }
+            }
+        }
+    }
 
     LaunchedEffect(Unit) {
         val savedRows = PortCheckerDataStore.loadRows(context)
@@ -91,7 +121,7 @@ fun PortCheckerScreenDynamic(context: Context) {
                         onClick = { viewModel.removeRow(index) },
                         modifier = Modifier.weight(0.4f)
                     ) {
-                        Icon(Icons.Default.Delete, contentDescription = "Eliminar fila")
+                        Icon(Icons.Default.Delete, contentDescription = "Eliminar Fila")
                     }
                 }
                 Spacer(modifier = Modifier.height(8.dp))
@@ -101,36 +131,21 @@ fun PortCheckerScreenDynamic(context: Context) {
         Spacer(modifier = Modifier.height(16.dp))
 
         // Botones para importar, exportar y agregar fila
-        Row(modifier = Modifier.fillMaxWidth().padding(8.dp)) {
-            Button(onClick = {
-                scope.launch {
-                    val json = viewModel.exportToJson(context)
-                    saveToFile(context, "hosts_ports.json", json)
-                }
-            }) {
+        Row(modifier = Modifier.fillMaxWidth().padding(4.dp)) {
+            Button(onClick = { exportLauncher.launch("hosts_ports.json") }) {
                 Text("Exportar")
             }
-            Spacer(modifier = Modifier.width(8.dp))
-            Button(onClick = {
-                scope.launch {
-                    val json = readFromFile(context, "hosts_ports.json")
-                    if (json != null) {
-                        viewModel.importFromJson(context, json)
-                    }
-                }
-            }) {
+            Spacer(modifier = Modifier.width(4.dp))
+            Button(onClick = { importLauncher.launch(arrayOf("application/json")) }) {
                 Text("Importar")
             }
-            Spacer(modifier = Modifier.width(8.dp))
-            Button(
-                onClick = { viewModel.addRow() },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Agregar fila")
+            Spacer(modifier = Modifier.width(4.dp))
+            Button(onClick = { viewModel.addRow() }) {
+                Text("Agregar Fila")
             }
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(4.dp))
 
         // Botón para iniciar/detener monitoreo
         Button(
@@ -146,19 +161,9 @@ fun PortCheckerScreenDynamic(context: Context) {
             },
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text(if (isChecking) "Detener monitoreo" else "Iniciar monitoreo")
+            Text(if (isChecking) "Detener Monitoreo" else "Iniciar Monitoreo")
         }
     }
-}
-
-fun saveToFile(context: Context, filename: String, content: String) {
-    val file = File(context.getExternalFilesDir(null), filename)
-    file.writeText(content)
-}
-
-fun readFromFile(context: Context, filename: String): String? {
-    val file = File(context.getExternalFilesDir(null), filename)
-    return if (file.exists()) file.readText() else null
 }
 
 // Campo de texto compacto
