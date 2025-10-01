@@ -1,9 +1,9 @@
 package ar.vrx_design.serversportcheck.viewmodel
 
 import android.content.Context
-import android.media.Ringtone
-import android.media.RingtoneManager
+import android.media.MediaPlayer
 import androidx.lifecycle.ViewModel
+import ar.vrx_design.serversportcheck.R
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -30,7 +30,7 @@ class PortCheckerViewModel : ViewModel() {
 
     private var monitoringJob: Job? = null
 
-    private var ringtone: Ringtone? = null
+    private var mediaPlayer: MediaPlayer? = null
 
     suspend fun exportToJson(context: Context): String {
         return withContext(Dispatchers.IO) {
@@ -90,7 +90,7 @@ class PortCheckerViewModel : ViewModel() {
         // Reiniciar los estados a "Waiting"
         _portStatuses.value = List(_rows.value.size) { "Waiting" }
 
-        ringtone?.stop() // Detener sonido si está activo
+        stopAlarm();
     }
 
     fun addRow(host: String = "", port: String = "") {
@@ -115,20 +115,25 @@ class PortCheckerViewModel : ViewModel() {
     }
 
     private fun playAlarm(context: Context) {
-        if (ringtone == null) {
-            val notificationUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-            ringtone = RingtoneManager.getRingtone(context, notificationUri)
+        if (mediaPlayer == null) {
+            mediaPlayer = MediaPlayer.create(context, R.raw.high_alert_warning_cut) // tu sonido en res/raw
+            mediaPlayer?.isLooping = false // si querés que se repita en loop
         }
 
-        if (!ringtone!!.isPlaying) {
-            ringtone?.play()
+        if (mediaPlayer?.isPlaying == false) {
+            mediaPlayer?.start()
         }
+    }
+
+    private fun stopAlarm() {
+        mediaPlayer?.stop()
+        mediaPlayer?.release()
+        mediaPlayer = null
     }
 
     override fun onCleared() {
         super.onCleared()
-        ringtone?.stop()
-        ringtone = null
+        stopAlarm();
     }
 
     private fun checkPort(host: String, port: Int): String {
