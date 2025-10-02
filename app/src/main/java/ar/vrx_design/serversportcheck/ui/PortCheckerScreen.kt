@@ -21,7 +21,6 @@ import ar.vrx_design.serversportcheck.utils.PortCheckerDataStore
 import ar.vrx_design.serversportcheck.viewmodel.PortCheckerViewModel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import java.io.File
 
 @Composable
 fun PortCheckerScreenDynamic(context: Context) {
@@ -61,7 +60,25 @@ fun PortCheckerScreenDynamic(context: Context) {
 
     LaunchedEffect(Unit) {
         val savedRows = PortCheckerDataStore.loadRows(context)
-        viewModel.updateRows(savedRows)
+
+        if (savedRows.isEmpty()) {
+            val defaultRows = listOf(
+                "200.41.229.82" to "1500",      //SQL Server
+                "200.41.229.82" to "5090",      //Totem Tech TZ-AVL05/AT06
+                "200.41.229.82" to "30003",     //Maker MK210
+                "200.41.229.82" to "40000",     /* Test Port */
+                "200.41.229.82" to "40013",     //Teltonika FM3612/FM3622/FMU130
+                "200.41.229.82" to "40017",     //Maker MK210
+                "200.41.229.82" to "40019",     //Wanway GS10 / Kiwatec KW24
+                "179.41.4.222"  to "40050",     //Teltonika FM3612/FM3622/FMU130
+                "179.41.4.222"  to "40051",     //Wanway GS10 / Kiwatec KW24
+                "179.41.4.222"  to "41000"      /* Test Port */
+            )
+            viewModel.updateRows(defaultRows)
+            PortCheckerDataStore.saveRows(context, defaultRows)
+        } else {
+            viewModel.updateRows(savedRows)
+        }
     }
 
     DisposableEffect(Unit) {
