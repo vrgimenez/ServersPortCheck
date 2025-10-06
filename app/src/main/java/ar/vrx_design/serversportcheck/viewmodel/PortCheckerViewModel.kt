@@ -18,6 +18,11 @@ import kotlinx.coroutines.flow.update
 import org.json.JSONArray
 import org.json.JSONObject
 
+// Constantes de Tiempo
+const val CHECK_PORT_TIMEOUT = 2000
+const val PORT_INTERVAL = 5000L
+inline fun listInterval(x: Int) = x * PORT_INTERVAL
+
 class PortCheckerViewModel : ViewModel() {
     private val _portStatuses = MutableStateFlow<List<String>>(emptyList())
     val portStatuses: StateFlow<List<String>> get() = _portStatuses
@@ -32,7 +37,7 @@ class PortCheckerViewModel : ViewModel() {
 
     private var mediaPlayer: MediaPlayer? = null
 
-    suspend fun exportToJson(context: Context): String {
+    suspend fun exportToJson(): String {
         return withContext(Dispatchers.IO) {
             val jsonArray = JSONArray()
             rows.value.forEach { (host, port) ->
@@ -45,7 +50,7 @@ class PortCheckerViewModel : ViewModel() {
         }
     }
 
-    suspend fun importFromJson(context: Context, jsonString: String) {
+    suspend fun importFromJson(jsonString: String) {
         withContext(Dispatchers.IO) {
             val jsonArray = JSONArray(jsonString)
             val importedRows = mutableListOf<Pair<String, String>>()
@@ -72,12 +77,13 @@ class PortCheckerViewModel : ViewModel() {
                             this[index] = status
                         }
                     }
+                  //delay(PORT_INTERVAL) // Esperar x segundos entre puertos
                 }
                 // Reproducir sonido si algún estado es "Cerrado"
                 if ("Cerrado" in _portStatuses.value) {
                     playAlarm(context)
                 }
-                delay(5000) // Esperar 5 segundos entre verificaciones
+                delay(listInterval(newRows.size)) // Esperar rows*x segundos entre verificaciones
             }
         }
     }
@@ -109,8 +115,14 @@ class PortCheckerViewModel : ViewModel() {
     }
 
     fun removeRow(index: Int) {
-        _rows.value = _rows.value.toMutableList().apply {
-            removeAt(index)
+        // eliminar del listado de filas
+        _rows.value = _rows.value.toMutableList().also {
+            if (index in it.indices) it.removeAt(index)
+        }
+
+        // eliminar también del listado de estados
+        _portStatuses.value = _portStatuses.value.toMutableList().also {
+            if (index in it.indices) it.removeAt(index)
         }
     }
 
@@ -133,14 +145,14 @@ class PortCheckerViewModel : ViewModel() {
 
     override fun onCleared() {
         super.onCleared()
-        stopAlarm();
+        stopAlarm()
     }
 
     private fun checkPort(host: String, port: Int): String {
         // Lógica de verificación del puerto
         return try {
             Socket().use { socket ->
-                socket.connect(InetSocketAddress(host, port), 2000)
+                socket.connect(InetSocketAddress(host, port), CHECK_PORT_TIMEOUT)
                 "Abierto"
             }
         } catch (e: Exception) {

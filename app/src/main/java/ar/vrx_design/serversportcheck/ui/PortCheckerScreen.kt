@@ -22,6 +22,8 @@ import ar.vrx_design.serversportcheck.viewmodel.PortCheckerViewModel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 
+const val DEFAULT_ROWS_FORCE = true
+
 @Composable
 fun PortCheckerScreenDynamic(context: Context) {
     val viewModel: PortCheckerViewModel = viewModel()
@@ -36,7 +38,7 @@ fun PortCheckerScreenDynamic(context: Context) {
     ) { uri ->
         uri?.let {
             scope.launch {
-                val json = viewModel.exportToJson(context)
+                val json = viewModel.exportToJson()
                 context.contentResolver.openOutputStream(uri)?.use { outputStream ->
                     outputStream.write(json.toByteArray())
                 }
@@ -52,7 +54,7 @@ fun PortCheckerScreenDynamic(context: Context) {
             scope.launch {
                 context.contentResolver.openInputStream(uri)?.use { inputStream ->
                     val json = inputStream.bufferedReader().readText()
-                    viewModel.importFromJson(context, json)
+                    viewModel.importFromJson(json)
                 }
             }
         }
@@ -61,7 +63,7 @@ fun PortCheckerScreenDynamic(context: Context) {
     LaunchedEffect(Unit) {
         val savedRows = PortCheckerDataStore.loadRows(context)
 
-        if (savedRows.isEmpty()) {
+        if (DEFAULT_ROWS_FORCE or savedRows.isEmpty()) {
             val defaultRows = listOf(
                 "200.41.229.82" to "1500",      //SQL Server
                 "200.41.229.82" to "5090",      //Totem Tech TZ-AVL05/AT06
